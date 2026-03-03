@@ -1,0 +1,28 @@
+const express = require('express');
+const router = express.Router();
+const auth = require('../middleware/auth');
+const { Timeline } = require('../models');
+
+router.get('/project/:projectId', auth, async (req, res) => {
+  try {
+    const posts = await Timeline.find({ project: req.params.projectId })
+      .populate('author', 'name')
+      .sort({ createdAt: -1 });
+    res.json(posts);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/', auth, async (req, res) => {
+  try {
+    const post = new Timeline({ ...req.body, author: req.userId });
+    await post.save();
+    await post.populate('author', 'name');
+    res.status(201).json(post);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+module.exports = router;
