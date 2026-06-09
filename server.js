@@ -64,3 +64,4 @@ const allowedOrigins = [
 
                                         const PORT = process.env.PORT || 5000;
                                         app.listen(PORT, () => console.log('KAIROS API v2.0 - port ' + PORT));
+                                        // deploy trigger
