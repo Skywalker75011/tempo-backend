@@ -26,7 +26,7 @@ router.post('/', auth, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
+router.put('/:id', auth, async (req, res) => { try { const post = await Timeline.findByIdAndUpdate(req.params.id, { title: req.body.title, content: req.body.content, type: req.body.type }, { new: true }).populate('author', 'name'); if (!post) return res.status(404).json({ error: 'Post non trouvé' }); res.json(post); } catch (error) { res.status(500).json({ error: error.message }); } });
 // DELETE timeline post
 router.delete('/:id', auth, async (req, res) => {
   try {
