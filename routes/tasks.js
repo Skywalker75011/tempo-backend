@@ -3,6 +3,7 @@ const router = express.Router();
 const auth = require('../middleware/auth');
 const { Task } = require('../models');
 
+
 router.get('/project/:projectId', auth, async (req, res) => {
   try {
     const tasks = await Task.find({ project: req.params.projectId }).sort({ startDate: 1 });
@@ -11,6 +12,7 @@ router.get('/project/:projectId', auth, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
 
 router.post('/', auth, async (req, res) => {
   try {
@@ -22,11 +24,23 @@ router.post('/', auth, async (req, res) => {
   }
 });
 
+
 router.patch('/:id', auth, async (req, res) => {
   try {
     const task = await Task.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!task) return res.status(404).json({ error: 'Tâche non trouvée' });
     res.json(task);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE task
+router.delete('/:id', auth, async (req, res) => {
+  try {
+    const task = await Task.findByIdAndDelete(req.params.id);
+    if (!task) return res.status(404).json({ error: 'Tâche non trouvée' });
+    res.json({ message: 'Tâche supprimée' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
