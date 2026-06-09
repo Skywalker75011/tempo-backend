@@ -1,9 +1,3 @@
-const express = require('express');
-const router = express.Router();
-const auth = require('../middleware/auth');
-const { Pin } = require('../models');
-
-router.get('/project/:projectId', auth, async (req, res) => {
   try {
     const pins = await Pin.find({ project: req.params.projectId })
       .populate('createdBy resolvedBy', 'name')
@@ -13,6 +7,7 @@ router.get('/project/:projectId', auth, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
 
 router.post('/', auth, async (req, res) => {
   try {
@@ -24,6 +19,7 @@ router.post('/', auth, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
 
 router.patch('/:id/toggle', auth, async (req, res) => {
   try {
@@ -43,6 +39,17 @@ router.patch('/:id/toggle', auth, async (req, res) => {
     await pin.save();
     await pin.populate('resolvedBy', 'name');
     res.json(pin);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE pin
+router.delete('/:id', auth, async (req, res) => {
+  try {
+    const pin = await Pin.findByIdAndDelete(req.params.id);
+    if (!pin) return res.status(404).json({ error: 'Pin non trouvé' });
+    res.json({ message: 'Pin supprimé' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
