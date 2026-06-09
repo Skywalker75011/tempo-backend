@@ -1,3 +1,10 @@
+const express = require('express');
+const router = express.Router();
+const auth = require('../middleware/auth');
+const { Pin } = require('../models');
+
+// GET pins for a project
+router.get('/project/:projectId', auth, async (req, res) => {
   try {
     const pins = await Pin.find({ project: req.params.projectId })
       .populate('createdBy resolvedBy', 'name')
@@ -7,7 +14,6 @@
     res.status(500).json({ error: error.message });
   }
 });
-
 
 router.post('/', auth, async (req, res) => {
   try {
@@ -20,12 +26,11 @@ router.post('/', auth, async (req, res) => {
   }
 });
 
-
 router.patch('/:id/toggle', auth, async (req, res) => {
   try {
     const pin = await Pin.findById(req.params.id);
     if (!pin) return res.status(404).json({ error: 'Pin non trouvée' });
-    
+
     if (pin.status === 'open') {
       pin.status = 'resolved';
       pin.resolvedAt = new Date();
@@ -35,7 +40,7 @@ router.patch('/:id/toggle', auth, async (req, res) => {
       pin.resolvedAt = null;
       pin.resolvedBy = null;
     }
-    
+
     await pin.save();
     await pin.populate('resolvedBy', 'name');
     res.json(pin);
