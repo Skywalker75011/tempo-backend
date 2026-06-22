@@ -4,7 +4,10 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
+const { evaluateAccess } = require('../middleware/access');
 const { Project, ProjectMember, AuditLog } = require('../models');
+
+const ALL_TABS = ['timeline', 'photos', 'ged', 'reserves', 'planning', 'pointage', 'finances'];
 
 const INTERNAL_ADMIN = ['owner', 'admin'];
 const TAB_KEYS = ['timeline', 'photos', 'ged', 'reserves', 'planning'];
@@ -31,6 +34,18 @@ async function logAudit(req, action, member, meta) {
     });
   } catch (_) { /* l'audit ne doit jamais bloquer l'action */ }
 }
+
+// GET — MES accès effectifs sur ce chantier (pour masquer les onglets côté frontend)
+router.get('/:projectId/me', auth, async (req, res) => {
+  try {
+    const tabs = {};
+    for (const t of ALL_TABS) {
+      const r = await evaluateAccess(req.user, req.params.projectId, t);
+      tabs[t] = !!r.ok;
+    }
+    res.json({ role: req.user.role, userType: req.user.userType || 'internal', tabs });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 // GET — liste des membres du chantier + leurs droits
 router.get('/:projectId', auth, async (req, res) => {
