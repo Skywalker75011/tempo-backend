@@ -5,8 +5,17 @@ const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true, lowercase: true },
   password: { type: String, required: true },
   name: { type: String, required: true },
-  role: { type: String, enum: ['admin', 'manager', 'worker'], default: 'worker' },
-  status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
+  // Enum élargi (anciens + nouveaux rôles) pour ne pas invalider les comptes existants.
+  // superadmin = plateforme (toi) ; owner/admin/staff = internes ; collaborator = externe.
+  role: { type: String, enum: ['superadmin', 'owner', 'admin', 'manager', 'staff', 'worker', 'collaborator'], default: 'staff' },
+  status: { type: String, enum: ['pending', 'approved', 'rejected', 'disabled'], default: 'pending' },
+
+  // ── v2 multi-tenant ──
+  organization: { type: mongoose.Schema.Types.ObjectId, ref: 'Organization', index: true },
+  userType:     { type: String, enum: ['platform', 'internal', 'external'], default: 'internal' },
+  emailVerified:{ type: Boolean, default: false },
+  invitedBy:    { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+
   createdAt: { type: Date, default: Date.now }
 });
 
