@@ -48,10 +48,13 @@ app.use('/api/document-validators', require('./routes/document-validators'));
 app.use('/api/reserve-plans',       require('./routes/reserve-plans'));
 app.use('/api/planning',            require('./routes/planning'));
 app.use('/api/validators',          require('./routes/validators'));
+// ── v2 (RBAC / multi-tenant) ──
+app.use('/api/contacts',            require('./routes/contacts'));
+app.use('/api/project-access',      require('./routes/project-access'));
 
 app.get('/health', (req, res) => res.json({
   status: 'OK',
-  version: '2.1.0',
+  version: '2.2.0-dev',
   mongo: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
 }));
 
