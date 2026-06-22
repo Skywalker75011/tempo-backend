@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
-const { Pin, Project } = require('../models');
+const { Pin } = require('../models');
+const Project = require('../models/Project');
 
 // Auto-generate numero R-XXXXXX
 async function generateNumero(projectId) {
@@ -14,8 +15,10 @@ async function checkProjectMember(req, res, projectId) {
   const project = await Project.findById(projectId);
   if (!project) { res.status(404).json({ error: 'Projet introuvable.' }); return null; }
   const userId = (req.userId || req.user?._id)?.toString();
-  const isMember = project.members.some(m => m.toString() === userId);
-  if (!isMember) { res.status(403).json({ error: 'Accès refusé — vous n\'êtes pas membre de ce projet.' }); return null; }
+  const isMember = (project.members || []).some(m => m.toString() === userId);
+  const isCreator = project.createdBy?.toString() === userId;
+  const isAdmin = req.user?.role === 'admin';
+  if (!isMember && !isCreator && !isAdmin) { res.status(403).json({ error: 'Accès refusé — vous n\'êtes pas membre de ce projet.' }); return null; }
   return project;
 }
 
