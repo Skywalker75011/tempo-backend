@@ -36,6 +36,8 @@ const employeeSchema = new mongoose.Schema({
   email:        { type: String },
   phone:        { type: String },
   company:      { type: String },
+  // propre = salarié de l'entreprise ; interimaire = intérim (company = agence d'intérim)
+  type:         { type: String, enum: ['propre', 'interimaire'], default: 'propre' },
   createdBy:    { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   createdAt:    { type: Date, default: Date.now },
 });
