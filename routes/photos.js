@@ -1,10 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
+const { requireProjectAccess, requireResourceAccess, projectIdOfResource } = require('../middleware/access');
 const Photo = require('../models/Photo');
 
+const ofPhoto = projectIdOfResource(Photo);
+
 // GET all photos for a project
-router.get('/project/:projectId', auth, async (req, res) => {
+router.get('/project/:projectId', auth, requireProjectAccess('photos', { projectIdFrom: r => r.params.projectId }), async (req, res) => {
   try {
     const photos = await Photo.find({ project: req.params.projectId })
       .populate('uploadedBy', 'name')
@@ -16,7 +19,7 @@ router.get('/project/:projectId', auth, async (req, res) => {
 });
 
 // GET photos by folder
-router.get('/project/:projectId/folder/:folderId', auth, async (req, res) => {
+router.get('/project/:projectId/folder/:folderId', auth, requireProjectAccess('photos', { projectIdFrom: r => r.params.projectId }), async (req, res) => {
   try {
     const photos = await Photo.find({
       project: req.params.projectId,
@@ -31,12 +34,10 @@ router.get('/project/:projectId/folder/:folderId', auth, async (req, res) => {
 });
 
 // POST create photo
-router.post('/', auth, async (req, res) => {
+router.post('/', auth, requireProjectAccess('photos', { projectIdFrom: r => r.body.project }), async (req, res) => {
   try {
-    const photo = new Photo({
-      ...req.body,
-      uploadedBy: req.userId
-    });
+    const { project, title, description, url, publicId, folder, gps, hasWatermark } = req.body;
+    const photo = new Photo({ project, title, description, url, publicId, folder, gps, hasWatermark, uploadedBy: req.userId });
     await photo.save();
     await photo.populate('uploadedBy', 'name');
     res.status(201).json(photo);
@@ -46,7 +47,7 @@ router.post('/', auth, async (req, res) => {
 });
 
 // PATCH update folder assignment
-router.patch('/:id', auth, async (req, res) => {
+router.patch('/:id', auth, requireResourceAccess('photos', ofPhoto), async (req, res) => {
   try {
     const photo = await Photo.findByIdAndUpdate(
       req.params.id,
@@ -61,7 +62,7 @@ router.patch('/:id', auth, async (req, res) => {
 });
 
 // DELETE photo
-router.delete('/:id', auth, async (req, res) => {
+router.delete('/:id', auth, requireResourceAccess('photos', ofPhoto), async (req, res) => {
   try {
     const photo = await Photo.findByIdAndDelete(req.params.id);
     if (!photo) return res.status(404).json({ error: 'Photo non trouvée' });

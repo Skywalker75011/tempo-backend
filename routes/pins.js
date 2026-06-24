@@ -1,8 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
+const { requireProjectAccess, requireResourceAccess, projectIdOfResource } = require('../middleware/access');
 const { Pin } = require('../models');
-const Project = require('../models/Project');
+
+const ofPin = projectIdOfResource(Pin);
 
 // Auto-generate numero R-XXXXXX
 async function generateNumero(projectId) {
@@ -10,24 +12,9 @@ async function generateNumero(projectId) {
   return 'R-' + String(count + 1).padStart(6, '0');
 }
 
-// FIX: IDOR — verify user is member of the project before any project-scoped access
-async function checkProjectMember(req, res, projectId) {
-  const project = await Project.findById(projectId);
-  if (!project) { res.status(404).json({ error: 'Projet introuvable.' }); return null; }
-  const userId = (req.userId || req.user?._id)?.toString();
-  const isMember = (project.members || []).some(m => m.toString() === userId);
-  const isCreator = project.createdBy?.toString() === userId;
-  const isAdmin = req.user?.role === 'admin';
-  if (!isMember && !isCreator && !isAdmin) { res.status(403).json({ error: 'Accès refusé — vous n\'êtes pas membre de ce projet.' }); return null; }
-  return project;
-}
-
 // GET all pins for a project
-router.get('/project/:projectId', auth, async (req, res) => {
+router.get('/project/:projectId', auth, requireProjectAccess('reserves', { projectIdFrom: r => r.params.projectId }), async (req, res) => {
   try {
-    // FIX: IDOR
-    if (!await checkProjectMember(req, res, req.params.projectId)) return;
-
     const { status, entreprise, corps_metier, lot } = req.query;
     const filter = { project: req.params.projectId };
     if (status) filter.status = status;
@@ -45,14 +32,12 @@ router.get('/project/:projectId', auth, async (req, res) => {
 });
 
 // GET single
-router.get('/:id', auth, async (req, res) => {
+router.get('/:id', auth, requireResourceAccess('reserves', ofPin), async (req, res) => {
   try {
     const pin = await Pin.findById(req.params.id)
       .populate('createdBy', 'name')
       .populate('resolvedBy', 'name');
     if (!pin) return res.status(404).json({ error: 'Not found' });
-    // FIX: IDOR on single pin
-    if (!await checkProjectMember(req, res, pin.project)) return;
     res.json(pin);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -60,13 +45,11 @@ router.get('/:id', auth, async (req, res) => {
 });
 
 // POST create
-router.post('/', auth, async (req, res) => {
+router.post('/', auth, requireProjectAccess('reserves', { projectIdFrom: r => r.body.project }), async (req, res) => {
   try {
-    // FIX: IDOR — verify membership before creating
-    if (!await checkProjectMember(req, res, req.body.project)) return;
-
-    const numero = await generateNumero(req.body.project);
-    const pin = new Pin({ ...req.body, numero, createdBy: req.userId });
+    const { project, type, title, description, entreprise, corps_metier, lot, plan_url, photos } = req.body;
+    const numero = await generateNumero(project);
+    const pin = new Pin({ project, type, title, description, entreprise, corps_metier, lot, plan_url, photos, numero, createdBy: req.userId });
     await pin.save();
     await pin.populate('createdBy', 'name');
     res.status(201).json(pin);
@@ -76,17 +59,15 @@ router.post('/', auth, async (req, res) => {
 });
 
 // PUT update
-router.put('/:id', auth, async (req, res) => {
+router.put('/:id', auth, requireResourceAccess('reserves', ofPin), async (req, res) => {
   try {
-    const pin = await Pin.findById(req.params.id);
-    if (!pin) return res.status(404).json({ error: 'Not found' });
-    // FIX: IDOR
-    if (!await checkProjectMember(req, res, pin.project)) return;
-
-    const data = { ...req.body, updatedAt: new Date() };
+    const allowed = ['type', 'title', 'description', 'entreprise', 'corps_metier', 'lot', 'plan_url', 'photos', 'status'];
+    const data = { updatedAt: new Date() };
+    allowed.forEach(f => { if (req.body[f] !== undefined) data[f] = req.body[f]; });
     const updated = await Pin.findByIdAndUpdate(req.params.id, data, { new: true })
       .populate('createdBy', 'name')
       .populate('resolvedBy', 'name');
+    if (!updated) return res.status(404).json({ error: 'Not found' });
     res.json(updated);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -94,13 +75,10 @@ router.put('/:id', auth, async (req, res) => {
 });
 
 // PATCH toggle status
-router.patch('/:id/toggle', auth, async (req, res) => {
+router.patch('/:id/toggle', auth, requireResourceAccess('reserves', ofPin), async (req, res) => {
   try {
     const pin = await Pin.findById(req.params.id);
     if (!pin) return res.status(404).json({ error: 'Not found' });
-    // FIX: IDOR
-    if (!await checkProjectMember(req, res, pin.project)) return;
-
     pin.status = pin.status === 'open' ? 'resolved' : 'open';
     if (pin.status === 'resolved') {
       pin.resolvedAt = new Date();
@@ -119,14 +97,10 @@ router.patch('/:id/toggle', auth, async (req, res) => {
 });
 
 // DELETE
-router.delete('/:id', auth, async (req, res) => {
+router.delete('/:id', auth, requireResourceAccess('reserves', ofPin), async (req, res) => {
   try {
-    const pin = await Pin.findById(req.params.id);
+    const pin = await Pin.findByIdAndDelete(req.params.id);
     if (!pin) return res.status(404).json({ error: 'Not found' });
-    // FIX: IDOR
-    if (!await checkProjectMember(req, res, pin.project)) return;
-
-    await Pin.findByIdAndDelete(req.params.id);
     res.json({ message: 'Deleted' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -134,11 +108,8 @@ router.delete('/:id', auth, async (req, res) => {
 });
 
 // Export Excel
-router.get('/project/:projectId/export/excel', auth, async (req, res) => {
+router.get('/project/:projectId/export/excel', auth, requireProjectAccess('reserves', { projectIdFrom: r => r.params.projectId }), async (req, res) => {
   try {
-    // FIX: IDOR
-    if (!await checkProjectMember(req, res, req.params.projectId)) return;
-
     const ExcelJS = require('exceljs');
     const pins = await Pin.find({ project: req.params.projectId })
       .populate('createdBy', 'name')
@@ -183,11 +154,8 @@ router.get('/project/:projectId/export/excel', auth, async (req, res) => {
 });
 
 // Export PDF
-router.get('/project/:projectId/export/pdf', auth, async (req, res) => {
+router.get('/project/:projectId/export/pdf', auth, requireProjectAccess('reserves', { projectIdFrom: r => r.params.projectId }), async (req, res) => {
   try {
-    // FIX: IDOR
-    if (!await checkProjectMember(req, res, req.params.projectId)) return;
-
     const PDFDocument = require('pdfkit');
     const pins = await Pin.find({ project: req.params.projectId })
       .populate('createdBy', 'name')

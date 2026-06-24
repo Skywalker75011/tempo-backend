@@ -1,7 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
+const { requireProjectAccess, requireResourceAccess, projectIdOfResource } = require('../middleware/access');
 const Document = require('../models/Document');
+
+const ofDocument = projectIdOfResource(Document);
+const DOC_CREATE_FIELDS = ['project', 'title', 'type', 'filename', 'url', 'publicId', 'fileData', 'fileType', 'fileSize'];
+const DOC_UPDATE_FIELDS = ['title', 'type', 'filename', 'url', 'publicId', 'fileData', 'fileType', 'fileSize', 'statut', 'validationStatus', 'validationComments'];
+function pick(body, fields) { const o = {}; fields.forEach(f => { if (body[f] !== undefined) o[f] = body[f]; }); return o; }
 
 function updateGlobalStatut(doc) {
   if (!doc.intervenants || doc.intervenants.length === 0) return;
@@ -15,7 +21,7 @@ function updateGlobalStatut(doc) {
   }
 }
 
-router.get('/project/:projectId', auth, async (req, res) => {
+router.get('/project/:projectId', auth, requireProjectAccess('ged', { projectIdFrom: r => r.params.projectId }), async (req, res) => {
   try {
     const docs = await Document.find({ project: req.params.projectId })
       .populate('uploadedBy', 'name')
@@ -27,7 +33,7 @@ router.get('/project/:projectId', auth, async (req, res) => {
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-router.get('/:id', auth, async (req, res) => {
+router.get('/:id', auth, requireResourceAccess('ged', ofDocument), async (req, res) => {
   try {
     const doc = await Document.findById(req.params.id)
       .populate('uploadedBy', 'name').populate('createdBy', 'name')
@@ -39,9 +45,9 @@ router.get('/:id', auth, async (req, res) => {
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-router.post('/', auth, async (req, res) => {
+router.post('/', auth, requireProjectAccess('ged', { projectIdFrom: r => r.body.project }), async (req, res) => {
   try {
-    const data = { ...req.body, uploadedBy: req.userId, createdBy: req.userId, depositedBy: req.userId };
+    const data = { ...pick(req.body, DOC_CREATE_FIELDS), uploadedBy: req.userId, createdBy: req.userId, depositedBy: req.userId };
     const doc = new Document(data);
     await doc.save();
     await doc.populate('uploadedBy', 'name');
@@ -50,16 +56,16 @@ router.post('/', auth, async (req, res) => {
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-router.put('/:id', auth, async (req, res) => {
+router.put('/:id', auth, requireResourceAccess('ged', ofDocument), async (req, res) => {
   try {
-    const doc = await Document.findByIdAndUpdate(req.params.id, { ...req.body, updatedAt: new Date() }, { new: true })
+    const doc = await Document.findByIdAndUpdate(req.params.id, { ...pick(req.body, DOC_UPDATE_FIELDS), updatedAt: new Date() }, { new: true })
       .populate('uploadedBy', 'name').populate('createdBy', 'name').populate('intervenants.user', 'name email');
     if (!doc) return res.status(404).json({ error: 'Not found' });
     res.json(doc);
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-router.delete('/:id', auth, async (req, res) => {
+router.delete('/:id', auth, requireResourceAccess('ged', ofDocument), async (req, res) => {
   try {
     const doc = await Document.findByIdAndDelete(req.params.id);
     if (!doc) return res.status(404).json({ error: 'Not found' });
@@ -68,9 +74,9 @@ router.delete('/:id', auth, async (req, res) => {
 });
 
 // POST /:id/validate — frontend uses POST (not PATCH)
-router.post('/:id/validate', auth, async (req, res) => {
+router.post('/:id/validate', auth, requireResourceAccess('ged', ofDocument), async (req, res) => {
   try {
-    const { validatorId, status } = req.body;
+    const { status } = req.body;
     if (!['approved', 'rejected', 'pending'].includes(status)) {
       return res.status(400).json({ error: 'status invalide.' });
     }
@@ -84,7 +90,7 @@ router.post('/:id/validate', auth, async (req, res) => {
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-router.post('/:id/validators', auth, async (req, res) => {
+router.post('/:id/validators', auth, requireResourceAccess('ged', ofDocument), async (req, res) => {
   try {
     const doc = await Document.findById(req.params.id);
     if (!doc) return res.status(404).json({ error: 'Not found' });
@@ -102,7 +108,7 @@ router.post('/:id/validators', auth, async (req, res) => {
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-router.patch('/:id/validate', auth, async (req, res) => {
+router.patch('/:id/validate', auth, requireResourceAccess('ged', ofDocument), async (req, res) => {
   try {
     const { decision, comment } = req.body;
     if (!['approved', 'rejected'].includes(decision)) {
@@ -120,7 +126,7 @@ router.patch('/:id/validate', auth, async (req, res) => {
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-router.delete('/:id/validators/:userId', auth, async (req, res) => {
+router.delete('/:id/validators/:userId', auth, requireResourceAccess('ged', ofDocument), async (req, res) => {
   try {
     const doc = await Document.findById(req.params.id);
     if (!doc) return res.status(404).json({ error: 'Not found' });

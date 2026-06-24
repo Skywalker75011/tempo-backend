@@ -9,11 +9,17 @@ const auth = async (req, res, next) => {
       return res.status(401).json({ error: 'Authentification requise' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'tempo_secret_key_2024');
+    // Pas de fallback : JWT_SECRET est obligatoire (server.js refuse de démarrer sans).
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.id);
 
     if (!user) {
       return res.status(401).json({ error: 'Utilisateur non trouvé' });
+    }
+
+    // Seuls les comptes approuvés peuvent agir (pending/disabled/rejected → refus immédiat).
+    if (user.status && user.status !== 'approved') {
+      return res.status(403).json({ error: 'Compte non actif.' });
     }
 
     req.user = user;

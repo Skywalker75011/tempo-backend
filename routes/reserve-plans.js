@@ -1,23 +1,26 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
+const { requireProjectAccess, requireResourceAccess, projectIdOfResource } = require('../middleware/access');
 const { ReservePlan } = require('../models');
 
-router.get('/project/:projectId', auth, async (req, res) => {
+const ofPlan = projectIdOfResource(ReservePlan);
+
+router.get('/project/:projectId', auth, requireProjectAccess('reserves', { projectIdFrom: r => r.params.projectId }), async (req, res) => {
   try {
     const plans = await ReservePlan.find({ project: req.params.projectId }).sort({ createdAt: -1 });
     res.json(plans);
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-router.get('/project/:projectId/folder/:folderId', auth, async (req, res) => {
+router.get('/project/:projectId/folder/:folderId', auth, requireProjectAccess('reserves', { projectIdFrom: r => r.params.projectId }), async (req, res) => {
   try {
     const plans = await ReservePlan.find({ project: req.params.projectId, folder: req.params.folderId }).sort({ name: 1 });
     res.json(plans);
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-router.post('/', auth, async (req, res) => {
+router.post('/', auth, requireProjectAccess('reserves', { projectIdFrom: r => r.body.project }), async (req, res) => {
   try {
     const { project, name, title, type, url, filename, folder } = req.body;
     if (!project || !name) return res.status(400).json({ error: 'project et name obligatoires.' });
@@ -28,7 +31,7 @@ router.post('/', auth, async (req, res) => {
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-router.patch('/:id', auth, async (req, res) => {
+router.patch('/:id', auth, requireResourceAccess('reserves', ofPlan), async (req, res) => {
   try {
     const allowedUpdates = ['name', 'title', 'type', 'url', 'filename', 'folder'];
     const updates = {};
@@ -39,7 +42,7 @@ router.patch('/:id', auth, async (req, res) => {
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-router.delete('/:id', auth, async (req, res) => {
+router.delete('/:id', auth, requireResourceAccess('reserves', ofPlan), async (req, res) => {
   try {
     const plan = await ReservePlan.findByIdAndDelete(req.params.id);
     if (!plan) return res.status(404).json({ error: 'Plan introuvable.' });

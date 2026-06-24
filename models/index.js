@@ -36,6 +36,8 @@ const employeeSchema = new mongoose.Schema({
   email:        { type: String },
   phone:        { type: String },
   company:      { type: String },
+  // propre = salarié de l'entreprise ; interimaire = intérim (company = agence d'intérim)
+  type:         { type: String, enum: ['propre', 'interimaire'], default: 'propre' },
   createdBy:    { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   createdAt:    { type: Date, default: Date.now },
 });
@@ -174,7 +176,18 @@ const validatorSchema = new mongoose.Schema({
 });
 const Validator = mongoose.model('Validator', validatorSchema);
 
+// Modèles définis dans leurs propres fichiers (Project/User étaient absents des
+// exports -> cause du bug Réserves 500). On les ré-exporte ici pour cohérence.
+const Project = require('./Project');
+const User = require('./User');
+const Organization = require('./Organization');
+const Contact = require('./Contact');
+const ProjectMember = require('./ProjectMember');
+const Invitation = require('./Invitation');
+const AuditLog = require('./AuditLog');
+
 module.exports = {
+  // Existants (définis ci-dessus)
   Pin,
   Employee,
   TimeEntry,
@@ -186,4 +199,13 @@ module.exports = {
   ReservePlan,
   Planning,
   Validator,
+  // Existants (fichiers séparés)
+  Project,
+  User,
+  // Nouveaux (v2)
+  Organization,
+  Contact,
+  ProjectMember,
+  Invitation,
+  AuditLog,
 };
