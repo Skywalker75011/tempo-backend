@@ -64,7 +64,6 @@ app.use('/api/validators',          require('./routes/validators'));
 // ── v2 (RBAC / multi-tenant) ──
 app.use('/api/contacts',            require('./routes/contacts'));
 app.use('/api/project-access',      require('./routes/project-access'));
-app.use('/api/admin',               require('./routes/admin-migrate')); // TEMPORAIRE : migration one-shot
 
 app.get('/health', (req, res) => res.json({
   status: 'OK',
