@@ -2,7 +2,14 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
+const { requireProjectAccess, requireResourceAccess, projectIdOfResource } = require('../middleware/access');
 const { Employee, TimeEntry } = require('../models');
+
+const ofEmployee = projectIdOfResource(Employee);
+const ofTimeEntry = projectIdOfResource(TimeEntry);
+const EMPLOYEE_FIELDS = ['name', 'role', 'metier', 'tauxHoraire', 'email', 'phone', 'company', 'type'];
+const TIME_FIELDS = ['employee', 'date', 'start', 'end', 'hours', 'tauxHoraire', 'coutJournee', 'gpsArrivee', 'gpsDepart', 'description'];
+function pick(body, fields) { const o = {}; fields.forEach(f => { if (body[f] !== undefined) o[f] = body[f]; }); return o; }
 
 // Calcul des heures entre deux horaires "HH:MM"
 function calcHours(start, end) {
@@ -16,7 +23,7 @@ function calcHours(start, end) {
 // ─── EMPLOYEES ──────────────────────────────────────────────────────────────────
 
 // GET all employees for a project
-router.get('/project/:projectId', auth, async (req, res) => {
+router.get('/project/:projectId', auth, requireProjectAccess('pointage', { projectIdFrom: r => r.params.projectId }), async (req, res) => {
   try {
     const employees = await Employee.find({ project: req.params.projectId }).sort({ createdAt: -1 });
     res.json(employees);
@@ -26,9 +33,9 @@ router.get('/project/:projectId', auth, async (req, res) => {
 });
 
 // POST create employee
-router.post('/', auth, async (req, res) => {
+router.post('/', auth, requireProjectAccess('pointage', { projectIdFrom: r => r.body.project }), async (req, res) => {
   try {
-    const employee = new Employee({ ...req.body, createdBy: req.userId });
+    const employee = new Employee({ ...pick(req.body, EMPLOYEE_FIELDS), project: req.body.project, createdBy: req.userId });
     await employee.save();
     res.status(201).json(employee);
   } catch (error) {
@@ -37,9 +44,9 @@ router.post('/', auth, async (req, res) => {
 });
 
 // PATCH update employee
-router.patch('/:id', auth, async (req, res) => {
+router.patch('/:id', auth, requireResourceAccess('pointage', ofEmployee), async (req, res) => {
   try {
-    const employee = await Employee.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const employee = await Employee.findByIdAndUpdate(req.params.id, pick(req.body, EMPLOYEE_FIELDS), { new: true });
     if (!employee) return res.status(404).json({ error: 'Employé non trouvé' });
     res.json(employee);
   } catch (error) {
@@ -48,7 +55,7 @@ router.patch('/:id', auth, async (req, res) => {
 });
 
 // DELETE employee
-router.delete('/:id', auth, async (req, res) => {
+router.delete('/:id', auth, requireResourceAccess('pointage', ofEmployee), async (req, res) => {
   try {
     const employee = await Employee.findByIdAndDelete(req.params.id);
     if (!employee) return res.status(404).json({ error: 'Employé non trouvé' });
@@ -61,7 +68,7 @@ router.delete('/:id', auth, async (req, res) => {
 // ─── TIME ENTRIES ───────────────────────────────────────────────────────────────
 
 // GET time entries for a project
-router.get('/project/:projectId/time', auth, async (req, res) => {
+router.get('/project/:projectId/time', auth, requireProjectAccess('pointage', { projectIdFrom: r => r.params.projectId }), async (req, res) => {
   try {
     const entries = await TimeEntry.find({ project: req.params.projectId })
       .populate('employee')
@@ -73,7 +80,7 @@ router.get('/project/:projectId/time', auth, async (req, res) => {
 });
 
 // GET rapport coûts par employé (mois/année)
-router.get('/project/:projectId/rapport-couts', auth, async (req, res) => {
+router.get('/project/:projectId/rapport-couts', auth, requireProjectAccess('pointage', { projectIdFrom: r => r.params.projectId }), async (req, res) => {
   try {
     const { mois, annee } = req.query;
     const m = parseInt(mois) || new Date().getMonth() + 1;
@@ -115,7 +122,7 @@ router.get('/project/:projectId/rapport-couts', auth, async (req, res) => {
 });
 
 // POST pointer arrivée — crée une entrée avec heure d'arrivée + GPS
-router.post('/time/arrive', auth, async (req, res) => {
+router.post('/time/arrive', auth, requireProjectAccess('pointage', { projectIdFrom: r => r.body.project }), async (req, res) => {
   try {
     const { project, employee: employeeId, date, start, gpsArrivee } = req.body;
     if (!project || !employeeId || !date || !start) {
@@ -125,6 +132,10 @@ router.post('/time/arrive', auth, async (req, res) => {
     // Snapshot du taux horaire au moment du pointage
     const emp = await Employee.findById(employeeId);
     if (!emp) return res.status(404).json({ error: 'Employé introuvable.' });
+    // L'employé doit appartenir au même chantier que celui dont on a validé l'accès.
+    if (emp.project.toString() !== project.toString()) {
+      return res.status(400).json({ error: 'Employé hors de ce chantier.' });
+    }
 
     // Vérifier qu'il n'y a pas déjà un pointage ouvert pour cet employé aujourd'hui
     const dateDebut = new Date(date);
@@ -161,7 +172,7 @@ router.post('/time/arrive', auth, async (req, res) => {
 });
 
 // PATCH pointer départ — ferme une entrée, calcule heures et coût
-router.patch('/time/:id/depart', auth, async (req, res) => {
+router.patch('/time/:id/depart', auth, requireResourceAccess('pointage', ofTimeEntry), async (req, res) => {
   try {
     const { end, gpsDepart } = req.body;
     if (!end) return res.status(400).json({ error: 'end obligatoire.' });
@@ -186,9 +197,9 @@ router.patch('/time/:id/depart', auth, async (req, res) => {
 });
 
 // POST create time entry (legacy / manuel)
-router.post('/time', auth, async (req, res) => {
+router.post('/time', auth, requireProjectAccess('pointage', { projectIdFrom: r => r.body.project }), async (req, res) => {
   try {
-    const entry = new TimeEntry({ ...req.body, createdBy: req.userId });
+    const entry = new TimeEntry({ ...pick(req.body, TIME_FIELDS), project: req.body.project, createdBy: req.userId });
     await entry.save();
     await entry.populate('employee');
     res.status(201).json(entry);
@@ -198,7 +209,7 @@ router.post('/time', auth, async (req, res) => {
 });
 
 // DELETE time entry
-router.delete('/time/:id', auth, async (req, res) => {
+router.delete('/time/:id', auth, requireResourceAccess('pointage', ofTimeEntry), async (req, res) => {
   try {
     const entry = await TimeEntry.findByIdAndDelete(req.params.id);
     if (!entry) return res.status(404).json({ error: 'Pointage non trouvé' });

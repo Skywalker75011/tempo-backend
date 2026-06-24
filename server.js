@@ -1,6 +1,8 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const dotenv = require('dotenv');
 dotenv.config();
 
@@ -8,6 +10,10 @@ if (!process.env.MONGODB_URI) { console.error('FATAL: MONGODB_URI manquant.'); p
 if (!process.env.JWT_SECRET) { console.error('FATAL: JWT_SECRET manquant.'); process.exit(1); }
 
 const app = express();
+
+// En-têtes de sécurité. API JSON pure (le front est servi par Netlify) → pas de CSP HTML.
+app.use(helmet());
+app.set('trust proxy', 1); // derrière le proxy Railway, pour un rate-limit par IP correct
 
 const allowedOrigins = [
   process.env.FRONTEND_URL,
@@ -33,7 +39,14 @@ mongoose.connect(process.env.MONGODB_URI, {
 }).then(() => console.log('MongoDB connecte'))
   .catch(err => { console.error('MongoDB erreur:', err.message); process.exit(1); });
 
-app.use('/api/auth',                require('./routes/auth'));
+// Rate-limit anti brute-force sur l'authentification (login/register).
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, max: 30,
+  standardHeaders: true, legacyHeaders: false,
+  message: { error: 'Trop de tentatives. Réessayez dans quelques minutes.' },
+});
+
+app.use('/api/auth',                authLimiter, require('./routes/auth'));
 app.use('/api/projects',            require('./routes/projects'));
 app.use('/api/photos',              require('./routes/photos'));
 app.use('/api/documents',           require('./routes/documents'));
