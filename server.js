@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const verifyTokenFast = require('./middleware/verify-token');
 const dotenv = require('dotenv');
 dotenv.config();
 
@@ -61,18 +62,20 @@ app.use('/api', globalLimiter);
 // là où il y a des uploads base64 (photos, documents, plans, timeline, réserves).
 app.use('/api/auth',                authLimiter, jsonSmall, require('./routes/auth'));
 app.use('/api/projects',            jsonSmall, require('./routes/projects'));
-app.use('/api/photos',              jsonBig,   require('./routes/photos'));
-app.use('/api/documents',           jsonBig,   require('./routes/documents'));
+// Routes d'upload : `verifyTokenFast` AVANT le gros parser → rejette (401) sans bufferiser
+// les 50 Mo si le jeton est absent/invalide (anti-DoS mémoire non authentifié).
+app.use('/api/photos',              verifyTokenFast, jsonBig,   require('./routes/photos'));
+app.use('/api/documents',           verifyTokenFast, jsonBig,   require('./routes/documents'));
 app.use('/api/employees',           jsonSmall, require('./routes/employees'));
 app.use('/api/tasks',               jsonSmall, require('./routes/tasks'));
 app.use('/api/finances',            jsonSmall, require('./routes/finances'));
-app.use('/api/timeline',            jsonBig,   require('./routes/timeline'));
-app.use('/api/pins',                jsonBig,   require('./routes/pins'));
-app.use('/api/reserves',            jsonBig,   require('./routes/pins'));
+app.use('/api/timeline',            verifyTokenFast, jsonBig,   require('./routes/timeline'));
+app.use('/api/pins',                verifyTokenFast, jsonBig,   require('./routes/pins'));
+app.use('/api/reserves',            verifyTokenFast, jsonBig,   require('./routes/pins'));
 app.use('/api/photo-folders',       jsonSmall, require('./routes/photo-folders'));
 app.use('/api/document-validators', jsonSmall, require('./routes/document-validators'));
-app.use('/api/reserve-plans',       jsonBig,   require('./routes/reserve-plans'));
-app.use('/api/planning',            jsonBig,   require('./routes/planning'));
+app.use('/api/reserve-plans',       verifyTokenFast, jsonBig,   require('./routes/reserve-plans'));
+app.use('/api/planning',            verifyTokenFast, jsonBig,   require('./routes/planning'));
 app.use('/api/validators',          jsonSmall, require('./routes/validators'));
 // ── v2 (RBAC / multi-tenant) ──
 app.use('/api/contacts',            jsonSmall, require('./routes/contacts'));
