@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const documentSchema = new mongoose.Schema({
   project:            { type: mongoose.Schema.Types.ObjectId, ref: 'Project', required: true },
     title:              { type: String, required: true },
-      type:               { type: String, enum: ['plan', 'devis', 'facture', 'contrat', 'autre'], default: 'autre' },
+      type:               { type: String, enum: ['plan', 'devis', 'facture', 'contrat', 'pv', 'autre'], default: 'autre' },
         filename:           String,
           url:                { type: String },
             publicId:           String,

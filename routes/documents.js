@@ -82,7 +82,8 @@ router.post('/:id/validate', auth, requireResourceAccess('ged', ofDocument), asy
     }
     const doc = await Document.findById(req.params.id);
     if (!doc) return res.status(404).json({ error: 'Document introuvable.' });
-    doc.validationStatus = status;
+    // `statut` a l'enum pending/approved/rejected (pas `validationStatus` = favorable/non-conforme/partiel)
+    doc.statut = status;
     doc.updatedAt = new Date();
     await doc.save();
     const obj = doc.toObject(); delete obj.fileData;
