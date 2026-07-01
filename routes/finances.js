@@ -5,7 +5,8 @@ const { requireProjectAccess, requireResourceAccess, projectIdOfResource } = req
 const { Finance } = require('../models');
 
 const ofFinance = projectIdOfResource(Finance);
-const FINANCE_FIELDS = ['periode', 'montant_marche', 'marche_ds', 'total_depenses', 'travaux_supplementaires', 'facturation_mois', 'depenses_mois', 'notes'];
+const FINANCE_FIELDS = ['periode', 'montant_marche', 'marche_ds', 'total_depenses', 'travaux_supplementaires', 'facturation_mois', 'depenses_mois', 'notes',
+  'type', 'title', 'amount', 'category', 'date'];
 function pick(body, fields) { const o = {}; fields.forEach(f => { if (body[f] !== undefined) o[f] = body[f]; }); return o; }
 
 function calcRAD(marche_ds, total_depenses, travaux_supplementaires) {

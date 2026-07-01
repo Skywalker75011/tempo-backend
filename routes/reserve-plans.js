@@ -22,10 +22,12 @@ router.get('/project/:projectId/folder/:folderId', auth, requireProjectAccess('r
 
 router.post('/', auth, requireProjectAccess('reserves', { projectIdFrom: r => r.body.project }), async (req, res) => {
   try {
-    const { project, name, title, type, url, filename, folder } = req.body;
-    if (!project || !name) return res.status(400).json({ error: 'project et name obligatoires.' });
+    const { project, type, url, filename, folder } = req.body;
+    // Le frontend envoie `title` pour un plan et `name` pour un dossier : on accepte les deux.
+    const name = (req.body.name || req.body.title || '').trim();
+    if (!project || !name) return res.status(400).json({ error: 'project et name/title obligatoires.' });
     if (type && !['folder','plan'].includes(type)) return res.status(400).json({ error: 'type: folder ou plan.' });
-    const plan = new ReservePlan({ project, name: name.trim(), title: title || name.trim(), type: type || 'plan', url: url || '', filename: filename || '', folder: folder || null });
+    const plan = new ReservePlan({ project, name, title: req.body.title || name, type: type || 'plan', url: url || '', filename: filename || '', folder: folder || null });
     await plan.save();
     res.status(201).json(plan);
   } catch (error) { res.status(500).json({ error: error.message }); }

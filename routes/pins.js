@@ -74,8 +74,8 @@ router.put('/:id', auth, requireResourceAccess('reserves', ofPin), async (req, r
   }
 });
 
-// PATCH toggle status
-router.patch('/:id/toggle', auth, requireResourceAccess('reserves', ofPin), async (req, res) => {
+// Toggle statut — exposé en PATCH (REST) ET en POST (le frontend appelle en POST)
+const toggleReserveStatus = async (req, res) => {
   try {
     const pin = await Pin.findById(req.params.id);
     if (!pin) return res.status(404).json({ error: 'Not found' });
@@ -94,7 +94,9 @@ router.patch('/:id/toggle', auth, requireResourceAccess('reserves', ofPin), asyn
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
-});
+};
+router.patch('/:id/toggle', auth, requireResourceAccess('reserves', ofPin), toggleReserveStatus);
+router.post('/:id/toggle',  auth, requireResourceAccess('reserves', ofPin), toggleReserveStatus);
 
 // DELETE
 router.delete('/:id', auth, requireResourceAccess('reserves', ofPin), async (req, res) => {
